@@ -1,0 +1,2 @@
+[04-Aug-2025 13:12:51 America/New_York] Stripe Notice: Undefined property of Stripe\Subscription instance: current_period_end
+[04-Aug-2025 23:43:30 America/New_York] Stripe Notice: Undefined property of Stripe\Subscription instance: current_period_end
