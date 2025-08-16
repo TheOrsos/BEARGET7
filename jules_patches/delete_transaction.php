@@ -1,5 +1,5 @@
 <?php
-// File: delete_transaction.php (Versione AJAX - Corretta e Semplificata)
+// File: delete_transaction.php (Versione AJAX - Corretta Definitivamente)
 session_start();
 require_once 'db_connect.php';
 
@@ -14,7 +14,8 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $user_id = $_SESSION["id"];
     $transaction_id = $_POST['transaction_id'] ?? null;
-    $restore_balance = ($_POST['restore_balance'] ?? 'no') === 'yes';
+    // L'utente vuole ripristinare il saldo? 'yes' o 'no'.
+    $should_restore_balance = ($_POST['restore_balance'] ?? 'no') === 'yes';
 
     if (empty($transaction_id)) {
         http_response_code(400);
@@ -54,21 +55,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
              throw new Exception("Nessuna transazione valida da eliminare.", 404);
         }
 
-        // Passo 3: Se richiesto, ripristinare il saldo per ogni transazione
-        if ($restore_balance) {
-            $sql_update_balance = "UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?";
+        // Passo 3: Logica di aggiornamento saldo
+        // Se NON dobbiamo ripristinare il saldo, dobbiamo neutralizzare l'effetto della cancellazione.
+        // Lo facciamo "assorbendo" l'importo della transazione nel saldo iniziale del conto.
+        if ($should_restore_balance === false) {
+            $sql_update_balance = "UPDATE accounts SET initial_balance = initial_balance + ? WHERE id = ? AND user_id = ?";
             $stmt_update = $conn->prepare($sql_update_balance);
 
             foreach ($transactions_to_delete as $tx) {
                 if ($tx['amount'] != 0 && !is_null($tx['account_id'])) {
                     $stmt_update->bind_param("dii", $tx['amount'], $tx['account_id'], $user_id);
                     if (!$stmt_update->execute()) {
-                        throw new Exception("Errore durante l'aggiornamento del saldo per il conto ID: " . $tx['account_id']);
+                        throw new Exception("Errore durante la neutralizzazione del saldo per il conto ID: " . $tx['account_id']);
                     }
                 }
             }
             $stmt_update->close();
         }
+        // Se $should_restore_balance è TRUE, non facciamo nulla. La semplice eliminazione
+        // della transazione farà sì che il saldo calcolato venga "ripristinato".
 
         // Passo 4: Eliminare le transazioni e i file associati
         $sql_delete = "DELETE FROM transactions WHERE id = ? AND user_id = ?";
