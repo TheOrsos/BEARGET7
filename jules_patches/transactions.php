@@ -331,10 +331,9 @@ $current_page = 'transactions';
             <h3 class="text-lg leading-6 font-bold text-white mt-4">Eliminare Transazione?</h3>
             <p class="mt-2 text-sm text-gray-400">Se la transazione fa parte di un trasferimento, verranno eliminate entrambe le voci. L'azione è irreversibile.</p>
 
-            <!-- Checkbox per ripristinare il saldo -->
             <div class="mt-4 text-left">
-                <label for="restore_balance" class="flex items-center space-x-3 cursor-pointer">
-                    <input type="checkbox" id="restore_balance" name="restore_balance" class="h-5 w-5 rounded bg-gray-700 border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800" checked>
+                <label for="restore_balance_checkbox" class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" id="restore_balance_checkbox" name="restore_balance" class="h-5 w-5 rounded bg-gray-700 border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800" checked>
                     <span class="text-sm font-medium text-gray-300">Ripristina l'importo sul saldo del conto</span>
                 </label>
             </div>
@@ -450,8 +449,11 @@ $current_page = 'transactions';
             confirmDeleteBtn.addEventListener('click', function() {
                 if (formToDelete) {
                     const formData = new FormData(formToDelete);
-                    const restoreBalance = document.getElementById('restore_balance').checked;
-                    formData.append('restore_balance', restoreBalance ? '1' : '0');
+                    if (document.getElementById('restore_balance_checkbox').checked) {
+                        formData.append('restore_balance', 'yes');
+                    } else {
+                        formData.append('restore_balance', 'no');
+                    }
 
                     const row = formToDelete.closest('tr');
                     fetch(formToDelete.action, { method: 'POST', body: formData })
@@ -526,7 +528,6 @@ $current_page = 'transactions';
             document.getElementById('edit-account').value = tx.account_id;
             document.getElementById('edit-category').value = tx.category_id;
 
-            // --- INIZIO CODICE CORRETTO ---
             const tagsInput = document.getElementById('edit-tags');
             if(tagsInput) {
                 tagsInput.value = tx.tags || '';
@@ -548,7 +549,6 @@ $current_page = 'transactions';
 
             if(deleteCheckbox) deleteCheckbox.checked = false;
             if(fileInput) fileInput.value = '';
-            // --- FINE CODICE CORRETTO ---
 
             openModal('edit-transaction-modal');
         }

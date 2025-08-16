@@ -1,5 +1,5 @@
 <?php
-// File: delete_transaction.php (Versione AJAX aggiornata)
+// File: delete_transaction.php (Versione AJAX - Corretta e Semplificata)
 session_start();
 require_once 'db_connect.php';
 
@@ -14,7 +14,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $user_id = $_SESSION["id"];
     $transaction_id = $_POST['transaction_id'] ?? null;
-    $restore_balance = isset($_POST['restore_balance']) && $_POST['restore_balance'] === '1';
+    $restore_balance = ($_POST['restore_balance'] ?? 'no') === 'yes';
 
     if (empty($transaction_id)) {
         http_response_code(400);
@@ -25,29 +25,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $conn->begin_transaction();
 
     try {
-        // Passo 1: Ottenere le informazioni sulla transazione/i da eliminare
-        $sql_get_transactions = "
-            SELECT id, amount, account_id, transfer_group_id, invoice_path
-            FROM transactions
-            WHERE user_id = ? AND (
-                id = ? OR
-                (
-                    transfer_group_id IS NOT NULL AND
-                    transfer_group_id = (SELECT transfer_group_id FROM transactions WHERE id = ? AND user_id = ?)
-                )
-            )
-        ";
-        $stmt_get = $conn->prepare($sql_get_transactions);
-        $stmt_get->bind_param("iiii", $user_id, $transaction_id, $transaction_id, $user_id);
-        $stmt_get->execute();
-        $transactions_to_delete = $stmt_get->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt_get->close();
+        // Passo 1: Ottenere le informazioni sulla transazione principale
+        $sql_get_main_tx = "SELECT id, amount, account_id, transfer_group_id, invoice_path FROM transactions WHERE id = ? AND user_id = ?";
+        $stmt_get_main = $conn->prepare($sql_get_main_tx);
+        $stmt_get_main->bind_param("ii", $transaction_id, $user_id);
+        $stmt_get_main->execute();
+        $main_transaction = $stmt_get_main->get_result()->fetch_assoc();
+        $stmt_get_main->close();
 
-        if (empty($transactions_to_delete)) {
+        if (!$main_transaction) {
             throw new Exception("Transazione non trovata o non autorizzata.", 404);
         }
 
-        // Passo 2: Se richiesto, ripristinare il saldo per ogni transazione
+        $transactions_to_delete = [];
+        // Passo 2: Se è un trasferimento, trovare tutte le transazioni collegate
+        if (!empty($main_transaction['transfer_group_id'])) {
+            $sql_get_transfer_group = "SELECT id, amount, account_id, invoice_path FROM transactions WHERE transfer_group_id = ? AND user_id = ?";
+            $stmt_get_group = $conn->prepare($sql_get_transfer_group);
+            $stmt_get_group->bind_param("si", $main_transaction['transfer_group_id'], $user_id);
+            $stmt_get_group->execute();
+            $transactions_to_delete = $stmt_get_group->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt_get_group->close();
+        } else {
+            $transactions_to_delete[] = $main_transaction;
+        }
+
+        if (empty($transactions_to_delete)) {
+             throw new Exception("Nessuna transazione valida da eliminare.", 404);
+        }
+
+        // Passo 3: Se richiesto, ripristinare il saldo per ogni transazione
         if ($restore_balance) {
             $sql_update_balance = "UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?";
             $stmt_update = $conn->prepare($sql_update_balance);
@@ -63,25 +70,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_update->close();
         }
 
-        // Passo 3: Eliminare le transazioni e i file associati
+        // Passo 4: Eliminare le transazioni e i file associati
         $sql_delete = "DELETE FROM transactions WHERE id = ? AND user_id = ?";
         $stmt_delete = $conn->prepare($sql_delete);
 
         foreach ($transactions_to_delete as $tx) {
-            // Delete transaction
+            // Elimina la transazione
             $stmt_delete->bind_param("ii", $tx['id'], $user_id);
             if (!$stmt_delete->execute()) {
                 throw new Exception("Errore durante l'eliminazione della transazione ID: " . $tx['id']);
             }
 
-            // Delete invoice file
+            // Elimina il file della fattura
             if (!empty($tx['invoice_path']) && file_exists($tx['invoice_path'])) {
                 unlink($tx['invoice_path']);
             }
         }
         $stmt_delete->close();
 
-        // Passo 4: Commit della transazione
+        // Passo 5: Commit della transazione
         $conn->commit();
 
         echo json_encode(['success' => true, 'message' => 'Transazione/i eliminata/e con successo!']);
