@@ -330,6 +330,15 @@ $current_page = 'transactions';
             </div>
             <h3 class="text-lg leading-6 font-bold text-white mt-4">Eliminare Transazione?</h3>
             <p class="mt-2 text-sm text-gray-400">Se la transazione fa parte di un trasferimento, verranno eliminate entrambe le voci. L'azione è irreversibile.</p>
+
+            <!-- Checkbox per ripristinare il saldo -->
+            <div class="mt-4 text-left">
+                <label for="restore_balance" class="flex items-center space-x-3 cursor-pointer">
+                    <input type="checkbox" id="restore_balance" name="restore_balance" class="h-5 w-5 rounded bg-gray-700 border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800" checked>
+                    <span class="text-sm font-medium text-gray-300">Ripristina l'importo sul saldo del conto</span>
+                </label>
+            </div>
+
             <div class="mt-8 flex justify-center space-x-4">
                 <button id="confirm-delete-btn" type="button" class="bg-danger hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-lg">Elimina</button>
                 <button type="button" onclick="closeModal('confirm-delete-modal')" class="bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-2 px-5 rounded-lg">Annulla</button>
@@ -441,6 +450,9 @@ $current_page = 'transactions';
             confirmDeleteBtn.addEventListener('click', function() {
                 if (formToDelete) {
                     const formData = new FormData(formToDelete);
+                    const restoreBalance = document.getElementById('restore_balance').checked;
+                    formData.append('restore_balance', restoreBalance ? '1' : '0');
+
                     const row = formToDelete.closest('tr');
                     fetch(formToDelete.action, { method: 'POST', body: formData })
                         .then(res => res.json())
